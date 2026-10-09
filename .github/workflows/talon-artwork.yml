@@ -1,0 +1,43 @@
+name: Sync official Talon add-on artwork
+
+on:
+  push:
+    branches:
+      - feat/talon-home-assistant-addon
+    paths:
+      - '.github/workflows/talon-artwork.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  artwork:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Fetch original Talon PNG artwork
+        run: |
+          set -eu
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/ivo-toby/talon/main/assets/logo/android-chrome-192x192.png -o talon/icon.png
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/ivo-toby/talon/main/assets/logo/talon-logo-zoom-out.png -o talon/logo.png
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ('icon.png', 'logo.png'):
+              data = (Path('talon') / name).read_bytes()
+              assert data.startswith(bytes.fromhex('89504e470d0a1a0a')), f'{name} is not PNG'
+          PY
+      - name: Commit original artwork to development branch
+        run: |
+          set -eu
+          git add talon/icon.png talon/logo.png
+          if git diff --cached --quiet; then
+            echo 'Artwork already up to date'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'assets(ha): add official Talon add-on artwork'
+          git push origin HEAD:feat/talon-home-assistant-addon
