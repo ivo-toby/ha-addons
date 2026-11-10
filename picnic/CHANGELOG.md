@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1
+
+- Run the MCP server as the unprivileged upstream `mcp` user.
+- Validate country and require a bearer token of at least 32 characters.
+- Document separate MCP Tunnel Manager configuration and session persistence checks.
+- Upstream image digest pinning remains required before production release.
+
 ## 1.0.0
 
 - Initial Home Assistant add-on for Picnic MCP.
