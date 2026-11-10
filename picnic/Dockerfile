@@ -1,7 +1,19 @@
-FROM ghcr.io/ivo-toby/mcp-picnic:latest
+# Build Picnic MCP from the verified upstream Git tag (not a GHCR image tag).
+FROM node:22-alpine AS upstream-build
+RUN apk add --no-cache git
+RUN git clone --depth 1 --branch v1.15.1 https://github.com/ivo-toby/mcp-picnic.git /app
+WORKDIR /app
+RUN npm ci --ignore-scripts && npm run build
 
-USER root
-RUN apk add --no-cache jq su-exec
+FROM node:22-alpine
+WORKDIR /app
+RUN apk add --no-cache jq su-exec \
+    && addgroup -S -g 1638 mcp \
+    && adduser -S -D -H -u 1638 -G mcp mcp
+COPY --from=upstream-build /app/package*.json ./
+RUN npm ci --omit=dev --ignore-scripts
+COPY --from=upstream-build /app/dist ./dist
+COPY --from=upstream-build /app/bin ./bin
 COPY run.sh /run.sh
 RUN chmod 755 /run.sh
 
