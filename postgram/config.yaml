@@ -1,5 +1,5 @@
 name: Postgram
-version: "0.1.4"
+version: "0.1.5"
 slug: postgram
 description: Postgram knowledge memory server with PostgreSQL and pgvector
 url: https://github.com/ivo-toby/postgram
@@ -18,11 +18,13 @@ ports_description:
   3000/tcp: Postgram web interface (trusted LAN only)
   3100/tcp: Postgram API and MCP (trusted LAN only)
 options:
+  database_name: postgram
   openai_api_key: ""
   log_level: info
   extraction_enabled: false
   extraction_model: ""
 schema:
+  database_name: str
   openai_api_key: password
   log_level: list(trace|debug|info|warn|error|fatal)
   extraction_enabled: bool
