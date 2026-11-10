@@ -14,8 +14,18 @@ su postgres -c "psql -h '$PGSOCKET' -d postgres -v ON_ERROR_STOP=1 -c 'ALTER ROL
 su postgres -c "psql -h '$PGSOCKET' -d template1 -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector;'"
 su postgres -c "psql -h '$PGSOCKET' -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='postgram'\" | grep -q 1 || createdb -h '$PGSOCKET' -O postgram postgram"
 su postgres -c "psql -h '$PGSOCKET' -d postgram -c 'CREATE EXTENSION IF NOT EXISTS vector;'"
-export DATABASE_URL="postgresql://postgram@127.0.0.1:5432/postgram"
-export POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 POSTGRES_DB=postgram POSTGRES_USER=postgram
+# Select only an existing database; never silently create an empty restore target.
+DATABASE_NAME="$(bashio::config 'database_name')"
+if [[ ! "$DATABASE_NAME" =~ ^[a-z][a-z0-9_]{0,62}$ ]]; then
+  bashio::log.fatal "Invalid database_name: use lowercase letters, digits and underscores."
+  exit 1
+fi
+if ! su postgres -c "psql -h '$PGSOCKET' -d postgres -Atqc \"SELECT 1 FROM pg_database WHERE datname = '$DATABASE_NAME'\"" | grep -qx 1; then
+  bashio::log.fatal "Database '$DATABASE_NAME' does not exist. Keeping the existing data untouched."
+  exit 1
+fi
+export DATABASE_URL="postgresql://postgram@127.0.0.1:5432/$DATABASE_NAME"
+export POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 POSTGRES_DB="$DATABASE_NAME" POSTGRES_USER=postgram
 export OPENAI_API_KEY="$(bashio::config 'openai_api_key')"
 export LOG_LEVEL="$(bashio::config 'log_level')"
 export EXTRACTION_ENABLED="$(bashio::config 'extraction_enabled')"
