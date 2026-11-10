@@ -1,7 +1,7 @@
 FROM ghcr.io/ivo-toby/mcp-picnic:latest
 
 USER root
-RUN apk add --no-cache jq
+RUN apk add --no-cache jq su-exec
 COPY run.sh /run.sh
 RUN chmod 755 /run.sh
 
