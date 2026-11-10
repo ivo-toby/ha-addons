@@ -1,4 +1,4 @@
-FROM ghcr.io/ivo-toby/mcp-picnic:latest
+FROM ghcr.io/ivo-toby/mcp-picnic:1.15.1
 
 USER root
 RUN apk add --no-cache jq su-exec
