@@ -1,5 +1,5 @@
 name: "Picnic MCP"
-version: "1.0.0"
+version: "1.0.1"
 slug: "picnic_mcp"
 description: "Picnic MCP server with direct authenticated HTTP access"
 url: "https://github.com/ivo-toby/mcp-picnic"
