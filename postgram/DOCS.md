@@ -8,7 +8,7 @@ The Postgram application source is not patched. The MCP annotations and strict O
 
 ## Before merging
 
-- Pin the official server image and UI build to a verified matching release, rather than floating `main`.
+- Build both the Postgram server and UI from the same pinned upstream tag (`cli-v1.41.1`); verify the build and runtime on both architectures.
 - Validate the image's startup/entrypoint assumptions and non-root runtime; this packaging launches Node directly.
 - Test onboarding, saving provider secrets through the web UI, PostgreSQL persistence, cold backup/restore, UI, API, MCP and OAuth routing.
 - Build and test both amd64 and aarch64.
