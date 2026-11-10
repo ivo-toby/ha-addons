@@ -10,6 +10,8 @@ fi
 su postgres -c "pg_ctl -D '$PGDATA' -o '-k $PGSOCKET -h 127.0.0.1' -w start"
 su postgres -c "psql -h '$PGSOCKET' -d postgres -tc \"SELECT 1 FROM pg_roles WHERE rolname='postgram'\" | grep -q 1 || createuser -h '$PGSOCKET' postgram"
 su postgres -c "psql -h '$PGSOCKET' -d postgres -v ON_ERROR_STOP=1 -c 'ALTER ROLE postgram CREATEDB;'"
+# New staging databases inherit pgvector from template1; the non-superuser postgram role cannot install it.
+su postgres -c "psql -h '$PGSOCKET' -d template1 -v ON_ERROR_STOP=1 -c 'CREATE EXTENSION IF NOT EXISTS vector;'"
 su postgres -c "psql -h '$PGSOCKET' -d postgres -tc \"SELECT 1 FROM pg_database WHERE datname='postgram'\" | grep -q 1 || createdb -h '$PGSOCKET' -O postgram postgram"
 su postgres -c "psql -h '$PGSOCKET' -d postgram -c 'CREATE EXTENSION IF NOT EXISTS vector;'"
 export DATABASE_URL="postgresql://postgram@127.0.0.1:5432/postgram"
