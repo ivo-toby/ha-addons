@@ -1,0 +1,25 @@
+name: "Picnic MCP"
+version: "1.0.1"
+slug: "picnic_mcp"
+description: "Picnic MCP server with direct authenticated HTTP access"
+url: "https://github.com/ivo-toby/mcp-picnic"
+startup: application
+boot: auto
+init: false
+arch:
+  - amd64
+  - aarch64
+ports:
+  3000/tcp: null
+ports_description:
+  3000/tcp: "MCP HTTP endpoint (publish only on a trusted network)"
+options:
+  picnic_username: null
+  picnic_password: null
+  picnic_country_code: "NL"
+  http_auth_token: null
+schema:
+  picnic_username: email
+  picnic_password: password
+  picnic_country_code: "list(NL|DE|FR)"
+  http_auth_token: password

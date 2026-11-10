@@ -17,6 +17,7 @@ https://github.com/ivo-toby/ha-addons
 | Add-on | Description |
 | ------ | ----------- |
 | [Talon](talon/) | Self-hosted autonomous AI agent daemon ([Talon](https://github.com/ivo-toby/talon)) with a built-in management terminal. |
+| [Picnic MCP](picnic/) | Picnic MCP over authenticated Streamable HTTP, without a tunnel. |
 
 ## Layout
 
