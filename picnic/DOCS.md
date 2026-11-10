@@ -20,4 +20,4 @@ After restarting the add-on, call a read-only MCP tool such as `picnic_get_cart`
 
 The server can read and modify your Picnic cart and potentially perform ordering actions. Keep the HTTP endpoint private, use a strong bearer token, and use TLS on any connection outside the trusted local network. The `/health` endpoint is intentionally unauthenticated.
 
-**Release blocker:** The Dockerfile currently uses upstream `:latest`. Before a production release, replace it with a verified immutable image digest that supports the Home Assistant architecture. Do not guess a digest or tag.
+**Release note:** The Dockerfile uses upstream `:latest` because the attempted `:1.15.1` GHCR image tag does not exist. Before a production release, verify an available versioned image tag or digest and confirm support for the Home Assistant architecture.
