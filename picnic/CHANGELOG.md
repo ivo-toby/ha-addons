@@ -5,7 +5,7 @@
 - Run the MCP server as the unprivileged upstream `mcp` user.
 - Validate country and require a bearer token of at least 32 characters.
 - Document separate MCP Tunnel Manager configuration and session persistence checks.
-- Reverted the nonexistent upstream GHCR `1.15.1` tag to `latest`; a verified immutable image reference remains a release follow-up.
+- Build directly from upstream Git tag `v1.15.1` instead of relying on an unavailable GHCR version tag.
 
 ## 1.0.0
 
