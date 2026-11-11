@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.6
+
+- Build the Postgram server and browser UI from the same pinned upstream tag, `cli-v1.41.1`, instead of following `main`.
+
+## 0.1.5
+
+- Add the `database_name` option to select an existing database, including a restored staging database, without deleting the original.
+
+## 0.1.4
+
+- Initialize pgvector in PostgreSQL `template1` so new staging databases can inherit the extension.
+
+## 0.1.3
+
+- Grant the Postgram PostgreSQL role permission to create databases needed by staging restore.
+
 ## 0.1.2
 
 - Allow Postgram backup uploads up to 1 GiB through the add-on nginx reverse proxy.
