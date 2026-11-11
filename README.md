@@ -18,7 +18,7 @@ https://github.com/ivo-toby/ha-addons
 | ------ | ----------- |
 | [Talon](talon/) | Self-hosted autonomous AI agent daemon ([Talon](https://github.com/ivo-toby/talon)) with a built-in management terminal. |
 | [Picnic MCP](picnic/) | Picnic MCP over authenticated Streamable HTTP, without a tunnel. |
-| [Postgram](postgram/) | Postgram knowledge memory server with PostgreSQL and pgvector (draft packaging). |
+| [Postgram](postgram/) | Postgram knowledge memory server with PostgreSQL and pgvector ([add-on documentation](postgram/DOCS.md); PR under review). |
 
 ## Layout
 
