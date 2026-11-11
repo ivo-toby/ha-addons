@@ -1,5 +1,55 @@
 # Talon Home Assistant add-on
 
+## Quick installation: Codex + Telegram
+
+1. In Home Assistant, open **Settings → Add-ons → Add-on Store → ⋮ → Repositories** and add `https://github.com/ivo-toby/ha-addons`. Install **Talon** from this repository.
+2. Leave the add-on options `instance` and `storage_path` empty for a first installation. Start Talon and select **Open Web UI** to access its management terminal.
+3. Check the daemon with `talonctl status`. Sign in to Codex using `codex login --device-auth` and follow the displayed instructions. Verify with `codex login status`.
+4. Configure Codex as the agent provider:
+
+   ```sh
+   talonctl add-provider --name codex --type cli --command codex
+   talonctl set-default-provider --name codex --context agent-runner
+   talonctl set-default-provider --name codex --context background
+   talonctl test-provider --name codex --context agent-runner
+   ```
+
+5. Check whether an assistant persona exists using `talonctl list-personas`. If not, create it with `talonctl add-persona --name assistant`. Set the persona model in `/data/talon/workspaces/default/talond.yaml` to a model supported by your Codex login. If `systemPromptFile` is configured, use an absolute path inside the workspace, for example `/data/talon/workspaces/default/personas/assistant/system.md`, and ensure that file exists.
+6. In Telegram, open **@BotFather**, send `/newbot`, and copy the token it gives you. In Talon's terminal, run:
+
+   ```sh
+   talonctl add-channel --name telegram --type telegram
+   ```
+
+7. Open `/data/talon/workspaces/default/talond.yaml` and locate the existing Telegram entry under `channels:`. Set its `config` to:
+
+   ```yaml
+   config:
+     botToken: "${TELEGRAM_BOT_TOKEN}"
+     pollingTimeoutSec: 30
+   ```
+
+   **Important: replace the entire `${TELEGRAM_BOT_TOKEN}` placeholder with the actual bot token from @BotFather**, for example:
+
+   ```yaml
+   botToken: "123456789:EXAMPLE_TOKEN"
+   ```
+
+   The example is not a real token. Do not paste your real token into GitHub, screenshots, support messages, or public logs. Storing the token directly in this private YAML file is the simplest setup; an environment variable is preferable for more advanced deployments. **Do not add a second top-level `channels:` section.**
+
+8. Bind Telegram to the assistant and reload:
+
+   ```sh
+   talonctl bind --persona assistant --channel telegram
+   talonctl reload
+   talonctl list-channels
+   talonctl list-providers
+   ```
+
+9. Open your bot in Telegram, tap **Start**, and send `Hello`. Then restart the add-on once and verify `talonctl status` and another Telegram reply to confirm persistence.
+
+**Troubleshooting:** If Telegram shows *typing* without replying, inspect the add-on logs for the provider actually handling the thread. An old thread may still be tied to `claude-code` even after Codex is set as default. Inspect with `talonctl list-threads --channel telegram` and, if appropriate, reset affinity using `talonctl reset-provider-affinity --channel telegram --all --yes`. If the add-on only opens a recovery terminal after restart, check the log's configuration-validation error: a missing file or invalid path can prevent the daemon from starting. Do not delete the workspace or database as a troubleshooting shortcut.
+
 ## Configuration
 
 The add-on settings select **instance**, private **storage_path**, and **attachment_allowed_origins**. Model, provider credentials, Telegram tokens, channel recipients, and persona settings belong in the workspace's `talond.yaml` or the provider's supported authentication flow. Talon keeps the existing configuration across restarts.
