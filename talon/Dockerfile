@@ -1,7 +1,7 @@
 # Build Talon from a pinned upstream ivo-toby/talon commit.
 # Review compatibility with outstanding Talon PRs before releasing.
 FROM node:24-bookworm-slim AS builder
-ARG TALON_GIT_REF=67d3b0a5b19d66290ada8735806c0583de21e06b
+ARG TALON_GIT_REF=338ce66f5ed63df5b5961a837da602aa8ebcdfd0
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/talond
 RUN git clone https://github.com/ivo-toby/talon.git . \
@@ -14,7 +14,7 @@ FROM node:24-bookworm-slim
 ARG BUILD_VERSION=1.0.0
 ARG BUILD_ARCH=amd64
 LABEL io.hass.version="${BUILD_VERSION}" io.hass.type="app" io.hass.arch="${BUILD_ARCH}"
-RUN apt-get update && apt-get install -y --no-install-recommends tini curl jq bash ca-certificates util-linux passwd && rm -rf /var/lib/apt/lists/* \
+RUN apt-get update && apt-get install -y --no-install-recommends tini curl jq bash ca-certificates util-linux procps passwd && rm -rf /var/lib/apt/lists/* \
  && useradd -m -s /bin/bash talond \
  && curl -fsSL https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 -o /usr/local/bin/ttyd \
  && echo "8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55  /usr/local/bin/ttyd" | sha256sum -c - \
