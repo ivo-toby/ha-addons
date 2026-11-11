@@ -5,10 +5,10 @@
 1. In Home Assistant, open **Settings → Add-ons → Add-on Store → ⋮ → Repositories** and add `https://github.com/ivo-toby/ha-addons`. Install **Talon** from this repository.
 2. Leave the add-on options `instance` and `storage_path` empty for a first installation. Start Talon and select **Open Web UI** to access its management terminal.
 3. Check the daemon with `talonctl status`. Sign in to Codex using `codex login --device-auth` and follow the displayed instructions. Verify with `codex login status`.
-4. Configure Codex as the agent provider:
+4. Configure Codex as the agent provider. **The `--enabled` flag is required:** without it, newly added providers are disabled by default, and setting the default provider or testing it will fail:
 
    ```sh
-   talonctl add-provider --name codex --type cli --command codex
+   talonctl add-provider --name codex --type cli --command codex --enabled
    talonctl set-default-provider --name codex --context agent-runner
    talonctl set-default-provider --name codex --context background
    talonctl test-provider --name codex --context agent-runner
