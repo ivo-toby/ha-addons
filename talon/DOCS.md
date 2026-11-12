@@ -14,15 +14,15 @@
    talonctl test-provider --name codex --context agent-runner
    ```
 
-5. Check personas with `talonctl list-personas`. If `assistant` does not exist, create it using `talonctl add-persona --name assistant`. **This command may create a Claude-model persona by default; creating a persona does not automatically select Codex.** Open `/data/talon/workspaces/default/talond.yaml` and update the existing `assistant` entry under `personas:` to use a model supported by your Codex account (for example, `model: gpt-6`). Keep any other persona fields intact. Example fields within that existing entry:
+5. Create the assistant persona **with Codex and its model explicitly selected at creation time**:
 
-   ```yaml
-   - name: assistant
-     model: gpt-6
-     systemPromptFile: /data/talon/workspaces/default/personas/assistant/system.md
+   ```sh
+   talonctl add-persona --name assistant --model gpt-6 --provider codex
+   talonctl list-personas
    ```
 
-   Ensure the system prompt file exists. Use an absolute path within the workspace. **The model name does not select the provider:** confirm that `agentRunner.defaultProvider` is `codex` and `agentRunner.providers.codex.enabled` is `true` in the effective configuration (`talonctl config-show`). If a `codex` provider already exists but is disabled, do not run `add-provider` again: enable the existing provider in `talond.yaml`. Check `talonctl list-providers` before proceeding.
+   The `--model` and `--provider` flags are supported by Talon's `add-persona` command. **Do not omit either flag:** without them the persona may use Claude defaults, even if Codex is the global default provider. The provider name must match the one created in step 4 (`codex`). If `assistant` already exists, do not run `add-persona` again; inspect the existing persona and update its `model` and `provider` fields in `talond.yaml` as needed. Keep its other settings and system prompt unchanged.
+
 6. In Telegram, open **@BotFather**, send `/newbot`, and copy the token it gives you. In Talon's terminal, run:
 
    ```sh
