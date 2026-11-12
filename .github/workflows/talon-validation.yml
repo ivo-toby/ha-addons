@@ -1,0 +1,51 @@
+name: Talon Home Assistant add-on validation
+
+on:
+  push:
+    branches:
+      - feat/talon-home-assistant-addon
+    paths:
+      - 'talon/**'
+      - '.github/workflows/talon-validation.yml'
+  pull_request:
+    paths:
+      - 'talon/**'
+      - '.github/workflows/talon-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate shell and JavaScript
+        run: |
+          sh -n talon/run.sh
+          node --check talon/check-config.cjs
+          node --check talon/ingress-proxy.cjs
+          node --check talon/sync-attachment-origins.cjs
+          node --test talon/*.test.cjs
+
+  addon-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image locally without publishing
+        uses: docker/build-push-action@v6
+        with:
+          context: ./talon
+          file: ./talon/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: talon-haos:ha-check
+      - name: Smoke-test image
+        run: python3 talon/smoke-image.py talon-haos:ha-check
