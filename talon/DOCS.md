@@ -23,6 +23,8 @@
    talonctl list-personas
    ```
 
+   **Before restarting the add-on**, verify that `systemPromptFile` in `talond.yaml` is an absolute path inside the selected workspace. For the default workspace use `/data/talon/workspaces/default/personas/assistant/system.md`. Some versions of `add-persona` write the relative path `personas/assistant/system.md`, which the add-on startup validator rejects. If so, back up `talond.yaml` and change only that path. Ensure the referenced file exists.
+
    The `--model` and `--provider` flags are supported by Talon's `add-persona` command. **Do not omit either flag:** without them the persona may use Claude defaults, even if Codex is the global default provider. The provider name must match the one created in step 4 (`codex`). If `assistant` already exists, do not run `add-persona` again; inspect the existing persona and update its `model` and `provider` fields in `talond.yaml` as needed. Keep its other settings and system prompt unchanged.
 
 6. In Telegram, open **@BotFather**, send `/newbot`, and copy the token it gives you. In Talon's terminal, run:
