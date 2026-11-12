@@ -40,23 +40,23 @@
    const p = '/data/talon/workspaces/default/talond.yaml';
    const s = fs.readFileSync(p, 'utf8');
    const token = process.env.TOKEN;
-   if (!token || !/^\\d+:[A-Za-z0-9_-]+$/.test(token)) throw new Error('Invalid Telegram token format');
-   const lines = s.split('\\n');
-   const start = lines.findIndex(l => /^\\s*-\\s+name:\\s*telegram\\s*$/.test(l));
+   if (!token || !/^\d+:[A-Za-z0-9_-]+$/.test(token)) throw new Error('Invalid Telegram token format');
+   const lines = s.split('\n');
+   const start = lines.findIndex(l => /^\s*-\s+name:\s*telegram\s*$/.test(l));
    if (start < 0) throw new Error('Telegram channel not found');
-   const end = lines.findIndex((l,i) => i > start && (/^\\s*-\\s+name:/.test(l) || /^[a-zA-Z][\\w]*:/.test(l)));
+   const end = lines.findIndex((l,i) => i > start && (/^\s*-\s+name:/.test(l) || /^[a-zA-Z][\w]*:/.test(l)));
    const stop = end < 0 ? lines.length : end;
-   const index = lines.findIndex((l,i) => i > start && i < stop && /^\\s*botToken:/.test(l));
+   const index = lines.findIndex((l,i) => i > start && i < stop && /^\s*botToken:/.test(l));
    if (index < 0) throw new Error('botToken missing');
-   lines[index] = lines[index].replace(/^(\\s*botToken:).*/, '$1 ' + JSON.stringify(token));
+   lines[index] = lines[index].replace(/^(\s*botToken:).*/, '$1 ' + JSON.stringify(token));
    fs.copyFileSync(p, p + '.bak');
-   fs.writeFileSync(p, lines.join('\\n'));
+   fs.writeFileSync(p, lines.join('\n'));
    console.log('Telegram token updated.');
    NODE
    unset TOKEN
    ```
 
-   This targets the default workspace; adjust the path for a named instance. Never paste your bot token into screenshots, logs, or GitHub. Do not assume that `talonctl add-channel` writes a literal `"\\${TELEGRAM_BOT_TOKEN}"` placeholder.
+   This targets the default workspace; adjust the path for a named instance. Never paste your bot token into screenshots, logs, or GitHub. Do not assume that `talonctl add-channel` writes a literal `"\${TELEGRAM_BOT_TOKEN}"` placeholder.
 
 8. Bind Telegram to the assistant and reload:
 
