@@ -8,11 +8,13 @@
 4. Configure Codex as the agent provider. **The `--enabled` flag is required:** without it, newly added providers are disabled by default, and setting the default provider or testing it will fail:
 
    ```sh
-   talonctl add-provider --name codex --type cli --command codex --enabled
+   talonctl add-provider --name codex --type codex-cli --command codex --enabled
    talonctl set-default-provider --name codex --context agent-runner
    talonctl set-default-provider --name codex --context background
    talonctl test-provider --name codex --context agent-runner
    ```
+
+   **Existing installations:** if `talond.yaml` has `type: cli` under `agentRunner.providers.codex` or `backgroundAgent.providers.codex`, change both to `type: codex-cli` and restart the add-on. Talon's daemon only registers provider types with a matching factory; `cli` is not a registered factory type, so Telegram may fail with `No enabled agent runner provider is configured` even when `test-provider` succeeds. Back up the YAML first. Do not delete threads or reset Codex authentication for this error.
 
 5. Create the assistant persona **with Codex and its model explicitly selected at creation time**:
 
