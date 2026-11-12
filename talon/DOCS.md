@@ -29,21 +29,15 @@
    talonctl add-channel --name telegram --type telegram
    ```
 
-7. Open `/data/talon/workspaces/default/talond.yaml` and locate the existing Telegram entry under `channels:`. Set its `config` to:
+7. Enter the Telegram bot token securely from the add-on terminal. This prompts without echoing the token and updates the existing token placeholder in `talond.yaml` without opening an editor:
 
-   ```yaml
-   config:
-     botToken: "${TELEGRAM_BOT_TOKEN}"
-     pollingTimeoutSec: 30
+   ```sh
+   read -rsp "Telegram bot-token: " TOKEN; echo
+   TOKEN="$TOKEN" node -e 'const fs=require("fs");const p="/data/talon/workspaces/default/talond.yaml";const s=fs.readFileSync(p,"utf8");const placeholder="\"\u0024{TELEGRAM_BOT_TOKEN}\"";if(!s.includes(placeholder)){console.error("Token-placeholder niet gevonden");process.exit(1)}fs.writeFileSync(p,s.replace(placeholder,JSON.stringify(process.env.TOKEN)))'
+   unset TOKEN
    ```
 
-   **Important: replace the entire `${TELEGRAM_BOT_TOKEN}` placeholder with the actual bot token from @BotFather**, for example:
-
-   ```yaml
-   botToken: "123456789:EXAMPLE_TOKEN"
-   ```
-
-   The example is not a real token. Do not paste your real token into GitHub, screenshots, support messages, or public logs. Storing the token directly in this private YAML file is the simplest setup; an environment variable is preferable for more advanced deployments. **Do not add a second top-level `channels:` section.**
+   **Important:** first ensure the existing Telegram channel config contains `botToken: "${TELEGRAM_BOT_TOKEN}"` (and `pollingTimeoutSec: 30`). Replace the placeholder only once. The command replaces the **quoted placeholder** with a correctly quoted and escaped JSON string (valid YAML); replacing only the text inside the quotes would create invalid YAML. Do not paste the token into the command itself, screenshots, GitHub or logs. This example targets the default workspace; adjust the path for a named instance. If the placeholder is missing, the command stops without changing the file.
 
 8. Bind Telegram to the assistant and reload:
 
