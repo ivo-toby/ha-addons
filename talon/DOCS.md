@@ -19,9 +19,11 @@
 5. Create the assistant persona **with Codex and its model explicitly selected at creation time**:
 
    ```sh
-   talonctl add-persona --name assistant --model gpt-6 --provider codex
+   talonctl add-persona --name assistant --model gpt-5.3-codex --provider codex
    talonctl list-personas
    ```
+
+   The model must be available to the installed Codex CLI and your ChatGPT account. `gpt-6` may return `model_not_found` with ChatGPT-backed Codex authentication; verify the model with a direct Codex test and adjust the persona model if necessary. The sample uses `gpt-5.3-codex` as a candidate, not a guaranteed entitlement.
 
    **Before restarting the add-on**, verify that `systemPromptFile` in `talond.yaml` is an absolute path inside the selected workspace. For the default workspace use `/data/talon/workspaces/default/personas/assistant/system.md`. Some versions of `add-persona` write the relative path `personas/assistant/system.md`, which the add-on startup validator rejects. If so, back up `talond.yaml` and change only that path. Ensure the referenced file exists.
 
