@@ -21,7 +21,7 @@ provider (for example, `codex login --device-auth` for Codex CLI).
 Opening the terminal does not itself sign you in. The add-on does not provide
 an OAuth login form.
 
-**Codex setup:** Adding a persona with `talonctl add-persona --name assistant` may default to a Claude model. After enabling and selecting the Codex provider, explicitly set the assistant's `model` in `talond.yaml` to a Codex-supported model and verify `agentRunner.defaultProvider: codex` and `agentRunner.providers.codex.enabled: true`. A model name alone does not select the provider. See [DOCS.md](DOCS.md#quick-installation-codex--telegram) for the complete steps.
+**Codex setup:** Create the persona with both the model and provider selected immediately: `talonctl add-persona --name assistant --model gpt-6 --provider codex` (after adding and enabling the provider named `codex`). Omitting these flags may select Claude defaults. Existing personas are not recreated; check their `model` and `provider` fields before changing them. See [DOCS.md](DOCS.md#quick-installation-codex--telegram) for the complete steps.
 
 If you select an existing workspace, its `talond.yaml` remains authoritative
 for models, channels, and recipients. The Home Assistant options do not
