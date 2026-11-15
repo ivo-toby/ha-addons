@@ -218,9 +218,9 @@ The add-on builds the upstream `v0.2.8` tag and preserves existing workspaces, C
 
 ### Voice is deliberately disabled by default
 
-The upstream browser voice feature requires a separate authenticated HTTP endpoint at `/voice/`, HTTPS, a correct public origin, WebRTC, an access token and a live-provider API key. The current add-on's single ingress port (7681) serves an authenticated recovery terminal, **not** the voice HTTP listener. Do not configure `voice.enabled: true` and expect `Open Web UI` to display voice. Do not publish voice on an unauthenticated host port or expose the terminal to make voice work.
+The upstream browser voice feature requires a separate authenticated HTTP endpoint at `/voice/`, HTTPS, a correct public origin, WebRTC, an access token and a live-provider API key. The add-on's ingress gateway routes `/voice/` to the **loopback-only** voice listener on port 8787, and all other paths to the recovery terminal. Voice remains opt-in. Home Assistant ingress must preserve the browser-facing path and origin correctly; verify this in a live authenticated HA session before enabling voice. Do not publish voice on an unauthenticated host port or expose the terminal to make voice work.
 
-Voice can be configured in the private workspace `talond.yaml` only after a separately reviewed, HTTPS-enabled proxy route is available. Use upstream [browser voice guidance](https://github.com/ivo-toby/talon/blob/v0.2.8/docs/guides/voice.mdx) for token references, same-origin checks, cookie security, proxy headers and persona permissions. Keep secrets out of Home Assistant logs and source control. The add-on does not automatically inject `OPENAI_API_KEY` or `TALON_VOICE_ACCESS_TOKEN` for voice.
+Voice can be configured in the private workspace `talond.yaml` after verifying the authenticated Home Assistant ingress route. Set `voice.host: 127.0.0.1`, `voice.port: 8787`, and `voice.enabled: true`; keep the listener loopback-only. Use the browser's real Home Assistant HTTPS origin in `voice.allowedOrigins`. Use upstream [browser voice guidance](https://github.com/ivo-toby/talon/blob/v0.2.8/docs/guides/voice.mdx) for token references, same-origin checks, cookie security, proxy headers and persona permissions. Keep secrets out of Home Assistant logs and source control. The add-on does not automatically inject `OPENAI_API_KEY` or `TALON_VOICE_ACCESS_TOKEN` for voice. Set `auth.providers.voice.apiKey` and `auth.providers.openai.apiKey` privately in the workspace configuration (never in Git). Test authentication and the upstream API billing requirements before placing calls.
 
 ### Upgrade acceptance checks
 
@@ -231,3 +231,7 @@ Voice can be configured in the private workspace `talond.yaml` only after a sepa
 5. Test database restore from the pre-upgrade backup; do not assume image-only rollback is safe.
 6. If enabling voice in a future add-on change, independently test HTTPS, authentication, CSRF, SSE, WebRTC, and the reverse-proxy Host/Origin/X-Forwarded-Proto behavior before exposing it.
 
+
+### Important ingress limitation
+
+Home Assistant ingress may expose the app under a session-specific prefix such as `/api/hassio_ingress/<session>/`. The new route dispatcher recognizes `/voice/` only after Supervisor strips that prefix. Upstream browser voice assumes absolute `/voice/` URLs and same-origin cookies; this may not be compatible with the HA ingress prefix. Until a real HA browser test confirms login, cookie path, assets, SSE and WebRTC, **do not claim browser voice is supported or expose an unauthenticated public endpoint**. If the path model is incompatible, implement a dedicated authenticated external reverse proxy instead of weakening the ingress gateway.
