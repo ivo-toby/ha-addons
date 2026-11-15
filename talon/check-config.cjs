@@ -14,6 +14,9 @@ try {
       throw new Error(label + ' does not point inside the selected state directory: ' + String(value));
     }
   }
+  if (cfg.voice?.enabled && ((cfg.voice.host ?? '127.0.0.1') !== '127.0.0.1' || cfg.voice.port !== 8787)) {
+    throw new Error('Voice ingress requires voice.host: 127.0.0.1 and voice.port: 8787');
+  }
   const prompts = (cfg.personas || []).map(p => p.systemPromptFile).filter(Boolean);
   for (const value of prompts) {
     if (typeof value !== 'string' || !value.startsWith(workspace + '/')) {

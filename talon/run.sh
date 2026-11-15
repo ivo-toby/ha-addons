@@ -7,6 +7,11 @@ if [ ! -f "$OPTIONS" ]; then
   exit 1
 fi
 
+# Optional browser voice credentials stay in the private HA options/environment.
+# Separate variable names avoid changing Codex or other provider authentication.
+export TALON_VOICE_ACCESS_TOKEN="$(jq -r '.voice_access_token // ""' "$OPTIONS")"
+export TALON_VOICE_OPENAI_API_KEY="$(jq -r '.voice_openai_api_key // ""' "$OPTIONS")"
+
 # One daemon per add-on, with private persistent storage.
 BASE="$(jq -r '.storage_path // ""' "$OPTIONS")"
 [ -n "$BASE" ] || BASE="/data/talon"
