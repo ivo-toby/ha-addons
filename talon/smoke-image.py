@@ -82,7 +82,7 @@ def supervisor_state(healthcheck):
 CLIENT = r"""
 const assert = require('node:assert/strict');
 const WebSocket = require('/opt/talond/node_modules/ws');
-const url = 'http://172.30.32.10:7681/';
+const url = 'http://172.30.32.10:7681/terminal/';
 const headers = {'X-Ingress-Path': '/api/hassio_ingress/test-session'};
 (async () => {
   const response = await fetch(url, {headers, signal: AbortSignal.timeout(10000)});
@@ -115,7 +115,7 @@ const headers = {'X-Ingress-Path': '/api/hassio_ingress/test-session'};
 DENIED = r"""
 const assert = require('node:assert/strict');
 (async () => {
-  for (const port of [7681, 7682]) {
+  for (const port of [7681, 7682, 8787]) {
     await assert.rejects(fetch(`http://172.30.32.10:${port}/`, {
       headers: {'X-Forwarded-For': '172.30.32.2', 'X-Real-IP': '172.30.32.2'},
       signal: AbortSignal.timeout(5000)
@@ -246,6 +246,54 @@ try:
     assert "daemon: stopped" in stop_logs, "Talon did not complete shutdown"
     assert "Session terminated, killing shell" not in stop_logs, "runuser shell termination persists"
     print("PASS normal Docker stop exits 0 after daemon shutdown; no runuser kill", flush=True)
+    # Exercise the real daemon bootstrap and HA credential environment without
+    # creating any paid provider session. Browser audio is tested separately.
+    voice_config = PREFIX + "-voice-config"
+    created_containers.append(voice_config)
+    configure_voice = r"""
+const fs=require('node:fs');
+const yaml=require('/opt/talond/node_modules/js-yaml');
+const file=process.argv[1];
+const cfg=yaml.load(fs.readFileSync(file,'utf8'));
+cfg.personas=[{name:'voice-fixture',provider:'codex-cli',model:'gpt-5.6'}];
+cfg.agentRunner={defaultProvider:'codex-cli',providers:{'codex-cli':{enabled:true,type:'codex-cli',command:'codex'}}};
+cfg.auth={providers:{voice:{apiKey:'${TALON_VOICE_ACCESS_TOKEN}'},voice_openai:{apiKey:'${TALON_VOICE_OPENAI_API_KEY}'}}};
+cfg.voice={enabled:true,host:'127.0.0.1',port:8787,persona:'voice-fixture',accessTokenRef:'voice',liveApiKeyRef:'voice_openai',allowedOrigins:['https://homeassistant.test']};
+fs.writeFileSync(file,yaml.dump(cfg));
+fs.writeFileSync('/data/options.json',JSON.stringify({voice_access_token:'fixture-voice-token',voice_openai_api_key:'fixture-no-live-api-access'}));
+"""
+    docker("run", "--rm", "--name", voice_config, "-v", VOLUME + ":/data",
+           "--entrypoint", "node", IMAGE, "-e", configure_voice, CONFIG)
+    docker("start", ADDON)
+    wait_for(lambda: "bootstrap: browser voice runtime initialized" in docker("logs", ADDON) and docker("logs", ADDON).count("talond started") >= 3, "voice daemon bootstrap")
+    voice_client = r"""
+const assert=require('node:assert/strict');
+(async()=>{
+ const headers={'X-Ingress-Path':'/api/hassio_ingress/voice-smoke',
+  'X-Forwarded-Host':'homeassistant.test','X-Forwarded-Proto':'https',Origin:'https://homeassistant.test', 'Content-Type':'application/json'};
+ const url='http://172.30.32.10:7681/voice/';
+ const page=await fetch(url,{headers,signal:AbortSignal.timeout(10000)});
+ assert.equal(page.status,200);
+ assert.match(await page.text(),/src="\.\/app.js"/);
+ const login=await fetch(url+'login',{method:'POST',headers,body:JSON.stringify({accessToken:'fixture-voice-token'}),signal:AbortSignal.timeout(10000)});
+ assert.equal(login.status,200);
+ const cookies=login.headers.getSetCookie();
+ assert.equal(cookies.length,2);
+ assert.ok(cookies.every(c=>c.includes('Path=/api/hassio_ingress/voice-smoke/voice/') && c.includes('Secure')));
+ const auth=await fetch(url+'auth/session',{headers:{...headers,Cookie:cookies.map(c=>c.split(';')[0]).join('; ')},signal:AbortSignal.timeout(10000)});
+ assert.equal(auth.status,200);
+ assert.equal((await auth.json()).authenticated,true);
+ console.log('PASS real daemon voice bootstrap, HA credential environment, ingress UI/login and Secure cookies');
+})().catch(e=>{console.error(e);process.exit(1)});
+"""
+    client("172.30.32.2", voice_client)
+    client("172.30.32.11", DENIED)
+    docker("stop", "-t", "60", ADDON)
+    restore_config = PREFIX + "-restore-config"
+    created_containers.append(restore_config)
+    docker("run", "--rm", "--name", restore_config, "-v", VOLUME + ":/data", "--entrypoint", "node", IMAGE,
+           "-e", "require('node:fs').writeFileSync(process.argv[1],process.argv[2]);", CONFIG, config)
+
     repair = PREFIX + "-repair"
     created_containers.append(repair)
     docker("run", "--rm", "--name", repair, "-v", VOLUME + ":/data", "--entrypoint", "node", IMAGE,

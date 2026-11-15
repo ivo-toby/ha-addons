@@ -17,9 +17,13 @@ options:
   storage_path: ""
   # Trusted HTTP(S) origins for Telegram attachment downloads.
   attachment_allowed_origins: []
+  voice_access_token: ""
+  voice_openai_api_key: ""
 schema:
   instance: str
   storage_path: str
   # Requires Talon attachment-origin support.
   attachment_allowed_origins:
     - str
+  voice_access_token: password
+  voice_openai_api_key: password

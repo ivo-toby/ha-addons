@@ -83,3 +83,10 @@ The add-on does not mount Home Assistant's shared directories. Connect external
 files through explicitly configured MCP servers.
 
 See [DOCS.md](DOCS.md) for more information.
+
+### Browser voice
+
+The web UI offers **Voice** and **Management & recovery terminal**. Browser voice
+runs through authenticated Home Assistant ingress after you configure an existing
+persona, voice access token, live-provider API key and your HTTPS Home Assistant
+origin. See [voice setup](DOCS.md#browser-voice-through-home-assistant-ingress).

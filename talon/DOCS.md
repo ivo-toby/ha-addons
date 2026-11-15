@@ -224,11 +224,66 @@ Upstream runs SQLite migrations `017-voice-sessions` and
 stop the add-on and restore the complete pre-upgrade backup together with the
 previous image. Reinstalling the previous image alone does not undo migrations.
 
-Browser voice remains disabled by default and is not supported through this
-add-on's ingress. Ingress continues to serve the recovery terminal only.
-Upstream voice uses absolute `/voice/` URLs and cookies that have not been
-validated with Home Assistant's session-specific ingress prefix. Voice support
-requires a separate change and authenticated HA browser testing.
+### Browser voice through Home Assistant ingress
+
+Open the add-on web UI and choose **Voice** or **Management & recovery terminal**.
+The terminal now lives at `terminal/`. Voice lives at `voice/`; the gateway keeps
+both under Home Assistant's authenticated ingress prefix. It does not publish
+an additional host port. Voice assets, API requests, SSE streams and login/CSRF
+cookies use the actual ingress prefix. Same-origin iframe embedding is enabled
+while retaining upstream origin, login and CSRF checks. The gateway accepts
+connections only from Supervisor's ingress IP.
+
+Voice is opt-in because it needs an existing persona and live-provider credentials:
+
+1. Set `voice_access_token` to a long random token and `voice_openai_api_key` to
+   your live-provider API key in the add-on configuration. Both fields are
+   passwords. They are passed through private environment variables, separately
+   from Codex authentication. Do not put them in a URL or source control.
+2. In the terminal, edit your workspace's `talond.yaml`. Merge these settings into
+   the existing `auth.providers` and choose an **existing configured persona**:
+
+   ```yaml
+   auth:
+     providers:
+       voice:
+         apiKey: ${TALON_VOICE_ACCESS_TOKEN}
+       voice_openai:
+         apiKey: ${TALON_VOICE_OPENAI_API_KEY}
+
+   voice:
+     enabled: true
+     host: 127.0.0.1
+     port: 8787
+     accessTokenRef: voice
+     liveApiKeyRef: voice_openai
+     persona: assistant  # replace with your existing persona's name
+     model: gpt-live-1
+     allowedOrigins:
+       - https://homeassistant.example.com  # your real HA origin, including port if any
+   ```
+
+   Keep other auth entries and persona configuration intact. The selected persona's
+   backend provider must be enabled and authenticated. Its backend model remains
+   independent of the live voice model. Use the live model supported by your
+   provider account. The add-on checks that enabled voice stays on `127.0.0.1:8787`;
+   an invalid binding enters terminal recovery mode.
+3. Restart the add-on, open **Voice**, sign in with `voice_access_token`, and
+   select **Call Talon**. Allow microphone access. A remembered login does not
+   start a call automatically. Mute, hangup and logout use the upstream UI.
+
+Use Home Assistant over **HTTPS** for microphone access on another device.
+Local loopback HTTP is suitable for tests. If an embedded or companion-app
+browser blocks microphone/audio, use **Open voice in a new browser tab** in a
+normal browser. Speech uses the live provider and can incur API usage charges;
+a Codex subscription/login alone does not supply the live audio API key.
+
+The automated browser test uses the real upstream voice server, authentication,
+UI, cookies and SSE under a HA-style iframe/prefix. Two browser peers exchange
+real synthetic WebRTC audio; the paid provider is replaced. A live provider call
+and physical device microphone/speaker still require a test on your installation.
+See [upstream voice configuration](https://github.com/ivo-toby/talon/blob/v0.2.8/docs/guides/voice.mdx)
+for persona policy, provider requirements and session limits.
 
 ### Upgrade checks
 

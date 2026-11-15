@@ -30,6 +30,7 @@ jobs:
           sh -n talon/run.sh
           node --check talon/check-config.cjs
           node --check talon/ingress-proxy.cjs
+          node --check talon/prepare-voice-web.cjs
           node --check talon/sync-attachment-origins.cjs
           node --test talon/*.test.cjs
 
@@ -64,3 +65,12 @@ jobs:
         run: python3 talon/smoke-image.py talon-haos:ha-check
       - name: Smoke-test workspace upgrade and backup restore
         run: python3 talon/smoke-image.py talon-haos:ha-check talon-haos:previous-check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install browser test runner
+        run: |
+          npm install --prefix "$RUNNER_TEMP/talon-browser" --no-save playwright@1.62.1
+          "$RUNNER_TEMP/talon-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Test voice login and real browser audio through ingress fixture
+        run: NODE_PATH="$RUNNER_TEMP/talon-browser/node_modules" python3 talon/smoke-voice.py talon-haos:ha-check

@@ -25,6 +25,9 @@ WORKDIR /opt/talond
 COPY --from=builder /opt/talond/package.json ./package.json
 COPY --from=builder /opt/talond/node_modules ./node_modules
 COPY --from=builder /opt/talond/dist ./dist
+COPY --chmod=0644 prepare-voice-web.cjs /usr/local/lib/talon-prepare-voice-web.cjs
+# Older source revisions used by upgrade tests predate browser voice.
+RUN if [ -f dist/voice/web/app.js ]; then node /usr/local/lib/talon-prepare-voice-web.cjs dist/voice/web; fi
 COPY run.sh /run.sh
 COPY talonctl /usr/local/bin/talonctl
 COPY --chmod=0644 ingress-proxy.cjs /usr/local/lib/talon-ingress-proxy.cjs
