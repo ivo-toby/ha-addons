@@ -90,7 +90,7 @@
 
 9. **Restart the Talon add-on from Home Assistant** to rebuild the daemon's provider registry. A `talonctl reload` hot-reload is not a substitute for a full restart after changing provider configuration. Run `talonctl status`, then open your bot in Telegram, tap **Start**, and send `Hello`. In the add-on logs verify `agent-runner: starting query` reports `provider: codex` and the bot actually replies. If the daemon opens only the recovery terminal, inspect startup logs and run `node /usr/local/lib/talon-check-config.cjs /data/talon/workspaces/default/talond.yaml /data/talon/workspaces/default /data/talon/workspaces/default/state` before restarting again.
 
-10. **Enable browser voice separately if you want speech.** The Codex/Telegram steps above do not create a `voice:` section, and filling the two voice password fields does not enable it. Follow [Enable voice after the quick installation](#enable-voice-after-the-quick-installation), then restart the add-on. Telegram and voice can use the same `assistant` persona.
+10. **Enable browser voice separately if you want speech.** The Codex/Telegram steps above do not create a `voice:` section, and filling the two voice password fields does not enable it. Follow [Enable voice after the quick installation](#enable-voice-after-the-quick-installation), then restart the add-on. Telegram and voice can use the same `assistant` persona. If you currently open HA over plain HTTP, first complete [Local HTTPS with DuckDNS, NGINX and AdGuard](#local-https-with-duckdns-nginx-and-adguard).
 
 **Troubleshooting:** If Telegram shows *typing* without replying, inspect the add-on logs for the provider actually handling the thread. An old thread may still be tied to `claude-code` even after Codex is set as default. Inspect with `talonctl list-threads --channel telegram` and, if appropriate, reset affinity using `talonctl reset-provider-affinity --channel telegram --all --yes`. If the add-on only opens a recovery terminal after restart, check the log's configuration-validation error: a missing file or invalid path can prevent the daemon from starting. Do not delete the workspace or database as a troubleshooting shortcut.
 
@@ -248,6 +248,7 @@ Voice is opt-in because it needs an existing persona and live-provider credentia
    start a call automatically. Mute, hangup and logout use the upstream UI.
 
 Use Home Assistant over **HTTPS** for microphone access on another device.
+If you do not have HTTPS yet, follow [the local HTTPS setup below](#local-https-with-duckdns-nginx-and-adguard).
 Local loopback HTTP is suitable for tests. If an embedded or companion-app
 browser blocks microphone/audio, use **Open voice in a new browser tab** in a
 normal browser. Speech uses the live provider and can incur API usage charges;
@@ -260,10 +261,114 @@ and physical device microphone/speaker still require a test on your installation
 See [upstream voice configuration](https://github.com/ivo-toby/talon/blob/v0.2.8/docs/guides/voice.mdx)
 for persona policy, provider requirements and session limits.
 
+### Local HTTPS with DuckDNS, NGINX and AdGuard
+
+This route supplies a trusted HTTPS address for voice on your **home network**.
+It uses a free DuckDNS subdomain and a Let's Encrypt certificate. DNS validation
+can issue the certificate without forwarding router ports to the internet.
+Your existing domain registration does not need to change.
+
+**All values in angle brackets are placeholders.** Replace
+`<YOUR_SUBDOMAIN>` with the name you actually register, `<YOUR_DUCKDNS_TOKEN>`
+with your DuckDNS token, and `<HA_LAN_IP>` with your Home Assistant machine's LAN
+IP. No personal domain, LAN IP, username or real token is included here.
+The same registered subdomain must be used throughout.
+
+1. Visit [DuckDNS](https://www.duckdns.org/), sign in and register an available
+   subdomain. Copy the token from your DuckDNS account privately. A domain looks
+   like `<YOUR_SUBDOMAIN>.duckdns.org`, **with a dot, not an `@` sign**. Verify
+   that the subdomain appears in your account's registered domains.
+2. In HA, open **Settings → Add-ons → Add-on Store** (called **Apps** in newer
+   versions), install **Duck DNS**, and open **Configuration → Edit in YAML**:
+
+   ```yaml
+   lets_encrypt:
+     accept_terms: true
+     algo: secp384r1
+     certfile: fullchain.pem
+     keyfile: privkey.pem
+   token: <YOUR_DUCKDNS_TOKEN>
+   domains:
+     - <YOUR_SUBDOMAIN>.duckdns.org
+   aliases: []
+   seconds: 300
+   ```
+
+   Setting `accept_terms: true` accepts the Let's Encrypt subscriber agreement.
+   Replace the placeholders, save, start Duck DNS and enable **Start on boot**.
+   Keep it running for certificate renewal. Wait for its log to confirm a
+   successful certificate request; DNS propagation may take several minutes.
+   The files are stored in `/ssl/fullchain.pem` and `/ssl/privkey.pem`.
+   See the [official DuckDNS instructions](https://github.com/home-assistant/addons/blob/master/duckdns/DOCS.md).
+3. Install **NGINX Home Assistant SSL proxy** from the same store. Set these
+   options, retaining the other defaults:
+
+   ```yaml
+   domain: <YOUR_SUBDOMAIN>.duckdns.org
+   certfile: fullchain.pem
+   keyfile: privkey.pem
+   ```
+
+   Under **Network**, map `443/tcp` to host port **443**. Configure this in the
+   add-on's network settings, not in your internet router. Start NGINX after
+   completing step 4 and after Duck DNS has issued the certificate.
+4. Use **File editor** or your existing HA configuration editor to edit
+   **Home Assistant's `configuration.yaml`**, not Talon's `talond.yaml`. Add:
+
+   ```yaml
+   http:
+     use_x_forwarded_for: true
+     trusted_proxies:
+       - 172.30.33.0/24
+   ```
+
+   If `http:` already exists, merge the settings under that block; do not create
+   a duplicate. These are the reverse-proxy settings from the official add-on
+   guide. NGINX handles the TLS certificate. Check HA's configuration, restart
+   Home Assistant, then start NGINX and enable **Start on boot**.
+   See the [official NGINX instructions](https://github.com/home-assistant/addons/blob/master/nginx_proxy/DOCS.md).
+5. In **AdGuard Home → Filters → DNS rewrites**, add:
+
+   ```text
+   Domain: <YOUR_SUBDOMAIN>.duckdns.org
+   Answer: <HA_LAN_IP>
+   ```
+
+   Your computer/tablet must actually use AdGuard Home as its DNS server.
+   Installing the add-on alone does not configure client DNS. Check your router's
+   LAN/DHCP DNS settings or the device's Wi-Fi DNS settings. The registered
+   hostname must resolve to your HA LAN IP on that device; browser Secure DNS
+   or a VPN can bypass the local resolver. See [AdGuard's DNS checks](https://adguard-dns.io/kb/adguard-home/faq/).
+6. On that device, open:
+
+   ```text
+   https://<YOUR_SUBDOMAIN>.duckdns.org
+   ```
+
+   Use **HTTPS without `:8123`** for this NGINX setup. HA must load without a
+   certificate warning. If resolution fails, check step 5. If you see
+   `400 Bad Request`, check the proxy settings in step 4. If the certificate is
+   wrong or missing, check the Duck DNS/NGINX logs and that both use the exact
+   registered hostname. Complete this check before configuring voice.
+7. Continue with [Enable voice after the quick installation](#enable-voice-after-the-quick-installation).
+   Enter `https://<YOUR_SUBDOMAIN>.duckdns.org` (with your own subdomain) at the
+   **Home Assistant HTTPS origin** prompt. At **Existing persona [assistant]**,
+   press Enter if `assistant` is already your configured persona. After the
+   success message, restart the **Talon add-on**, open it through the HTTPS HA
+   address, select **Voice**, sign in with the Talon voice-access-token and allow
+   microphone access when starting a call.
+
+Keep DuckDNS tokens, voice passwords, OpenAI keys and certificate private keys
+out of screenshots, shared logs and source control. If an error message displays
+a token, redact it before sharing; regenerate an exposed token in its service
+and update the corresponding private add-on setting.
+
 ### Enable voice after the quick installation
 
 **Do this after quick-installation steps 1–9 and after saving the two voice
-password fields.** It is normal for `voice:` to be absent until this step. The
+password fields.** First verify that HA opens over HTTPS without a certificate
+warning; use [the local HTTPS guide](#local-https-with-duckdns-nginx-and-adguard)
+if needed. It is normal for `voice:` to be absent until this step. The
 password fields make secrets available to Talon; they do not write or enable
 voice in `talond.yaml`.
 
@@ -278,7 +383,7 @@ voice in `talond.yaml`.
    create `assistant` again if it already exists. The persona's provider must be
    enabled and authenticated as described in steps 3–4.
 2. Copy this **entire command block** into that terminal. It asks for your real
-   HTTPS Home Assistant origin (for example `https://ha.example.com:8123`, without
+   HTTPS Home Assistant origin (for example `https://ha.example.com`, without
    `/app/...` or an ingress path) and your existing persona name. Press Enter to
    use `assistant`. No passwords or API keys are entered into this command.
 
@@ -295,7 +400,7 @@ voice in `talond.yaml`.
    const origin = new URL(input);
    if (origin.protocol !== 'https:' || origin.username || origin.password ||
        origin.pathname !== '/' || origin.search || origin.hash) {
-     throw new Error('Enter only the HTTPS origin, e.g. https://ha.example.com:8123');
+     throw new Error('Enter only the HTTPS origin, e.g. https://ha.example.com');
    }
    const cfg = yaml.load(fs.readFileSync(file, 'utf8'));
    const name = (process.env.TALON_VOICE_PERSONA || '').trim() || 'assistant';
@@ -332,16 +437,19 @@ voice in `talond.yaml`.
    the original formatting and comments. Secrets remain references to the two
    HA options, rather than being copied into YAML. A previously selected live
    voice model is preserved; `gpt-live-1` is the upstream default for a new setup.
-3. **Restart the entire add-on from Home Assistant**, so the saved password
-   options are exported and the voice listener starts. Open **Voice** and sign
-   in with your `voice_access_token`.
+3. Confirm the command prints `Voice enabled for persona assistant` when that
+   persona was selected. **Restart the entire add-on from Home Assistant**, so
+   the saved password options are exported and the voice listener starts. Open
+   HA using the same HTTPS origin you entered, select **Voice**, sign in with
+   your `voice_access_token`, then select **Call Talon** and allow the microphone.
+   The voice-access-token is the password from the Talon options, not the
+   DuckDNS token or OpenAI API key.
 4. If the page still says **Voice is unavailable**, check the **Talon add-on
    logs**, rather than the Supervisor installation log. Look for
    `browser voice server started` on `127.0.0.1:8787` and any earlier configuration
    error. Do not delete your workspace or database.
 
-A LAN IP address opened over plain HTTP, such as `http://192.168.1.103:8123`, is
-not sufficient for browser microphone access. Set up HTTPS first, then open HA
+Opening a LAN IP address over plain HTTP is not sufficient for browser microphone access. Set up HTTPS first, then open HA
 through that same HTTPS origin. The script deliberately rejects a plain-HTTP
 origin so this prerequisite is not missed.
 
