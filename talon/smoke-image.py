@@ -158,6 +158,7 @@ try:
     state = inspect(repro)["State"]
     assert state["Status"] == "running" and "Health" not in state, state
     print("PASS reproduced NONE -> STARTUP with running container and no Docker Health", flush=True)
+    docker("rm", "-f", repro)
 
     docker("network", "create", "--subnet", "172.30.32.0/24", NETWORK)
     created_network = True

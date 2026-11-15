@@ -27,7 +27,7 @@ COPY --from=builder /opt/talond/node_modules ./node_modules
 COPY --from=builder /opt/talond/dist ./dist
 COPY run.sh /run.sh
 COPY talonctl /usr/local/bin/talonctl
-COPY ingress-proxy.cjs /usr/local/lib/talon-ingress-proxy.cjs
+COPY --chmod=0644 ingress-proxy.cjs /usr/local/lib/talon-ingress-proxy.cjs
 COPY check-config.cjs /usr/local/lib/talon-check-config.cjs
 COPY sync-attachment-origins.cjs /usr/local/lib/talon-sync-attachment-origins.cjs
 RUN chmod 0755 /run.sh /usr/local/bin/talonctl && mkdir -p /data/talon
