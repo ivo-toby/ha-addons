@@ -2,10 +2,11 @@
 
 ## 1.0.3
 
-- Update pinned upstream Talon source from commit `338ce66f` to release tag `v0.2.8`.
-- Keep the Codex CLI version and Home Assistant storage configuration unchanged.
-- Verify image build and existing workspace compatibility before merging.
-
+- Update Talon to v0.2.8, pinned to immutable commit `abf6c71722d61d3d24830419457d4f0b61633822` in both source-build Dockerfiles.
+- Keep Codex CLI 0.159.0, persistent workspace configuration and the existing terminal ingress bridge.
+- Correct the image version label used by standalone builds and CI.
+- Test the previous workspace upgrade, retained data, CLI status and complete backup restore in CI.
+- Document database migrations, backup/rollback and the unsupported browser voice ingress path.
 
 ## 1.0.0
 

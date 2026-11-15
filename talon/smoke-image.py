@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the built HA image in disposable Docker fixtures, never a live HA.
 
-Usage: python3 talon/smoke-image.py talon-haos:current-check
+Usage: python3 talon/smoke-image.py talon-haos:current-check [talon-haos:previous]
 Requires a Linux Docker engine and Python 3. No host ports or existing volumes.
 """
 import ast
@@ -18,6 +18,7 @@ from urllib.request import urlopen
 import uuid
 
 IMAGE = sys.argv[1]
+PREVIOUS_IMAGE = sys.argv[2] if len(sys.argv) > 2 else None
 PREFIX = "talon-smoke-" + uuid.uuid4().hex[:10]
 NETWORK, VOLUME, ADDON = (PREFIX + suffix for suffix in ("-net", "-data", "-addon"))
 SUPERVISOR_REV = "01b32d6d31125425260638f768980d35659c4874"
@@ -25,6 +26,9 @@ CONFIG = "/data/talon/workspaces/default/talond.yaml"
 DB = "/data/talon/workspaces/default/state/talond.sqlite"
 created_containers = []
 created_network = created_volume = created_repro_image = False
+BACKUP = PREFIX + "-backup"
+created_backup = False
+sqlite = "const db=require('better-sqlite3')(process.argv[1]);"
 
 
 def docker(*args, stdin=None):
@@ -163,12 +167,41 @@ try:
     created_containers.append(init)
     docker("run", "--rm", "--name", init, "-v", VOLUME + ":/data", "--entrypoint",
            "sh", IMAGE, "-c", 'printf "{}" > /data/options.json')
+    previous_config = None
+    if PREVIOUS_IMAGE:
+        previous = PREFIX + "-previous"
+        created_containers.append(previous)
+        docker("run", "-d", "--name", previous, "--network", NETWORK,
+               "--ip", "172.30.32.10", "-v", VOLUME + ":/data", PREVIOUS_IMAGE)
+        wait_for(lambda: "talond started" in docker("logs", previous), "previous image startup")
+        previous_config = docker("exec", previous, "cat", CONFIG)
+        assert docker("exec", "-w", "/opt/talond", previous, "node", "-e", sqlite +
+                      "console.log(db.pragma('user_version',{simple:true})); db.close();", DB) == "16"
+        docker("exec", "-w", "/opt/talond", previous, "node", "-e", sqlite +
+               "db.exec(\"CREATE TABLE upgrade_sentinel(value TEXT); INSERT INTO upgrade_sentinel VALUES ('before-upgrade')\"); db.close();", DB)
+        docker("stop", "-t", "60", previous)
+        docker("volume", "create", BACKUP)
+        created_backup = True
+        docker("run", "--rm", "-v", VOLUME + ":/data:ro", "-v", BACKUP + ":/backup",
+               "--entrypoint", "cp", IMAGE, "-a", "/data/.", "/backup/")
+        docker("rm", previous)
+
     created_containers.append(ADDON)
     docker("run", "-d", "--name", ADDON, "--network", NETWORK, "--ip", "172.30.32.10",
            "-v", VOLUME + ":/data", IMAGE)
     wait_for(lambda: "talond started" in docker("logs", ADDON), "keyless daemon startup")
     config = docker("exec", ADDON, "cat", CONFIG)
-    # Talon upstream owns bootstrap defaults; the wrapper must not inject a provider.\n    assert "personas: []" in config and "channels: []" in config\n    assert "codex-cli" not in config and "gpt-5.6" not in config
+    # Talon upstream owns bootstrap defaults; the wrapper must not inject a provider.
+    assert "personas: []" in config and "channels: []" in config
+    assert "codex-cli" not in config and "gpt-5.6" not in config
+    assert "0.159.0" in docker("exec", ADDON, "codex", "--version")
+    assert docker("exec", "-w", "/opt/talond", ADDON, "node", "-e", sqlite +
+                  "console.log(db.pragma('user_version',{simple:true})); db.close();", DB) == "18"
+    if previous_config is not None:
+        assert config == previous_config
+        assert docker("exec", "-w", "/opt/talond", ADDON, "node", "-e", sqlite +
+                      "console.log(db.prepare('SELECT value FROM upgrade_sentinel').get().value); db.close();", DB) == "before-upgrade"
+        print("PASS previous workspace upgraded from schema 16 to 18; YAML and data retained", flush=True)
     state = inspect(ADDON)["State"]
     assert state["Status"] == "running" and "Health" not in state
     # Wait for ttyd to accept connections, not just for the daemon to start.
@@ -184,11 +217,15 @@ try:
         except subprocess.CalledProcessError:
             return False
     wait_for(terminal_ready, "ttyd loopback listener on port 7682")
+    status = docker("exec", "--user", "talond",
+                    "-e", "TALON_WORKSPACE=/data/talon/workspaces/default",
+                    "-e", "TALOND_CONFIG_PATH=" + CONFIG, ADDON, "talonctl", "status")
+    assert "talond status" in status
+    print("PASS talonctl status through persistent workspace IPC", flush=True)
     client("172.30.32.2", CLIENT)
     client("172.30.32.11", DENIED)
 
     # Write a sentinel only into this test's fresh database. No user volumes.
-    sqlite = "const db=require('better-sqlite3')(process.argv[1]);"
     docker("exec", "-w", "/opt/talond", ADDON, "node", "-e", sqlite +
            "db.exec(\"CREATE TABLE smoke_sentinel(value TEXT); INSERT INTO smoke_sentinel VALUES ('preserved')\"); db.close();", DB)
     docker("restart", "-t", "60", ADDON)
@@ -217,11 +254,30 @@ try:
     wait_for(lambda: "Recovery terminal available" in docker("logs", ADDON), "recovery terminal")
     client("172.30.32.2", CLIENT)
     print("PASS recovery terminal with invalid daemon config", flush=True)
+
+    if PREVIOUS_IMAGE:
+        docker("stop", "-t", "60", ADDON)
+        docker("rm", ADDON)
+        docker("run", "--rm", "-v", VOLUME + ":/data", "-v", BACKUP + ":/backup:ro",
+               "--entrypoint", "sh", IMAGE, "-c",
+               "find /data -mindepth 1 -maxdepth 1 -exec rm -rf {} + && cp -a /backup/. /data/")
+        docker("run", "-d", "--name", ADDON, "--network", NETWORK, "--ip", "172.30.32.10",
+               "-v", VOLUME + ":/data", PREVIOUS_IMAGE)
+        wait_for(lambda: "talond started" in docker("logs", ADDON), "restored previous image startup")
+        assert docker("exec", ADDON, "cat", CONFIG) == previous_config
+        assert docker("exec", "-w", "/opt/talond", ADDON, "node", "-e", sqlite +
+                      "console.log(db.pragma('user_version',{simple:true})); db.close();", DB) == "16"
+        assert docker("exec", "-w", "/opt/talond", ADDON, "node", "-e", sqlite +
+                      "console.log(db.prepare('SELECT value FROM upgrade_sentinel').get().value); db.close();", DB) == "before-upgrade"
+        client("172.30.32.2", CLIENT)
+        print("PASS complete backup restore boots previous image with schema 16 and original data", flush=True)
 finally:
     if ADDON in created_containers:
         subprocess.run(["docker", "logs", ADDON], check=False)
     for name in reversed(created_containers):
         subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if created_backup:
+        subprocess.run(["docker", "volume", "rm", BACKUP], check=False)
     if created_network:
         subprocess.run(["docker", "network", "rm", NETWORK], check=False)
     if created_volume:

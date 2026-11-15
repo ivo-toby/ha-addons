@@ -212,26 +212,32 @@ inspect and back up the directory before manually resolving the conflict.
 
 The ingress proxy runs as the unprivileged `talond` user. Its supervisor restarts it after unexpected exits, without restarting the Talon daemon. On shutdown, the launcher stops the supervisor and its proxy child. Check add-on logs if ingress remains unavailable.
 
-## Talon v0.2.8 upgrade and browser voice
+## Talon v0.2.8 upgrade
 
-The add-on builds the upstream `v0.2.8` tag and preserves existing workspaces, Codex login, Telegram channels and MCP configuration. Back up the Home Assistant add-on before installing the new image. Do not delete or recreate the workspace: upstream includes SQLite migrations `017-voice-sessions` and `018-voice-auth-sessions` which may change the existing database on first startup. Rollback must restore the matching pre-upgrade database backup, not only the previous image.
+Add-on 1.0.3 builds upstream Talon v0.2.8 at immutable commit
+`abf6c71722d61d3d24830419457d4f0b61633822`. Codex CLI remains at 0.159.0.
+Existing workspace paths and configuration are retained.
 
-### Voice is deliberately disabled by default
+Stop the add-on and make a Home Assistant add-on backup before upgrading.
+Upstream runs SQLite migrations `017-voice-sessions` and
+`018-voice-auth-sessions` on startup, even with voice disabled. To roll back,
+stop the add-on and restore the complete pre-upgrade backup together with the
+previous image. Reinstalling the previous image alone does not undo migrations.
 
-The upstream browser voice feature requires a separate authenticated HTTP endpoint at `/voice/`, HTTPS, a correct public origin, WebRTC, an access token and a live-provider API key. The add-on's ingress gateway routes `/voice/` to the **loopback-only** voice listener on port 8787, and all other paths to the recovery terminal. Voice remains opt-in. Home Assistant ingress must preserve the browser-facing path and origin correctly; verify this in a live authenticated HA session before enabling voice. Do not publish voice on an unauthenticated host port or expose the terminal to make voice work.
+Browser voice remains disabled by default and is not supported through this
+add-on's ingress. Ingress continues to serve the recovery terminal only.
+Upstream voice uses absolute `/voice/` URLs and cookies that have not been
+validated with Home Assistant's session-specific ingress prefix. Voice support
+requires a separate change and authenticated HA browser testing.
 
-Voice can be configured in the private workspace `talond.yaml` after verifying the authenticated Home Assistant ingress route. Set `voice.host: 127.0.0.1`, `voice.port: 8787`, and `voice.enabled: true`; keep the listener loopback-only. Use the browser's real Home Assistant HTTPS origin in `voice.allowedOrigins`. Use upstream [browser voice guidance](https://github.com/ivo-toby/talon/blob/v0.2.8/docs/guides/voice.mdx) for token references, same-origin checks, cookie security, proxy headers and persona permissions. Keep secrets out of Home Assistant logs and source control. The add-on does not automatically inject `OPENAI_API_KEY` or `TALON_VOICE_ACCESS_TOKEN` for voice. Set `auth.providers.voice.apiKey` and `auth.providers.openai.apiKey` privately in the workspace configuration (never in Git). Test authentication and the upstream API billing requirements before placing calls.
+### Upgrade checks
 
-### Upgrade acceptance checks
-
-1. Build `docker build -t talon-haos:1.0.3-check talon` and run `python3 talon/smoke-image.py talon-haos:1.0.3-check` on a disposable Docker host.
-2. Verify the upstream tag resolves, dependencies install, and the compiled daemon starts with an existing Codex workspace.
-3. Check `talonctl status`, Telegram messages, MCP calls, and existing database/thread continuity after restart.
-4. Verify the recovery terminal remains available after intentionally invalid configuration, and the ingress gateway restriction still rejects other peers.
-5. Test database restore from the pre-upgrade backup; do not assume image-only rollback is safe.
-6. If enabling voice in a future add-on change, independently test HTTPS, authentication, CSRF, SSE, WebRTC, and the reverse-proxy Host/Origin/X-Forwarded-Proto behavior before exposing it.
-
-
-### Important ingress limitation
-
-Home Assistant ingress may expose the app under a session-specific prefix such as `/api/hassio_ingress/<session>/`. The new route dispatcher recognizes `/voice/` only after Supervisor strips that prefix. Upstream browser voice assumes absolute `/voice/` URLs and same-origin cookies; this may not be compatible with the HA ingress prefix. Until a real HA browser test confirms login, cookie path, assets, SSE and WebRTC, **do not claim browser voice is supported or expose an unauthenticated public endpoint**. If the path model is incompatible, implement a dedicated authenticated external reverse proxy instead of weakening the ingress gateway.
+1. Build `docker build -t talon-haos:1.0.3-check talon` and run
+   `python3 talon/smoke-image.py talon-haos:1.0.3-check` on a disposable Docker host.
+   This checks startup, terminal HTTP/WebSocket access, ingress peer restrictions,
+   restart persistence, shutdown and recovery after invalid configuration.
+   CI also builds the previous Talon revision and passes it as a second argument
+   to test migration from schema 16 to 18 and full backup restore to schema 16.
+2. After upgrading, check `talonctl status`, Codex login, configured Telegram
+   channels, MCP calls and existing conversation history in your own workspace.
+3. Verify backup restore on a disposable instance before relying on rollback.

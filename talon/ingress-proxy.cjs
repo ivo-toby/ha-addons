@@ -1,8 +1,8 @@
 'use strict';
 
-// Authenticated Home Assistant ingress gateway. Only the Supervisor ingress
-// gateway may connect; no other add-on gets direct terminal or voice access.
-const http = require('node:http');
+// Raw TCP bridge for Home Assistant ingress -> loopback-only ttyd.
+// Do not trust the entire Docker subnet: that would let other add-ons bypass
+// Home Assistant's authenticated ingress and reach an interactive shell.
 const net = require('node:net');
 const { isIP } = net;
 
@@ -13,82 +13,38 @@ function trustedIngressPeers(value = process.env.TALON_INGRESS_GATEWAYS) {
   }
   return new Set(peers);
 }
+
 function normalizePeer(address) {
   return (address || '').replace(/^::ffff:/, '');
 }
-function targetFor(url) {
-  const pathname = new URL(url || '/', 'http://localhost').pathname;
-  // Strict prefix match prevents /voiceevil from being sent to the voice server.
-  return pathname === '/voice' || pathname.startsWith('/voice/')
-    ? {port: 8787, voice: true} : {port: 7682, voice: false};
-}
-function authorized(socket, peers, log) {
-  const peer = normalizePeer(socket.remoteAddress);
-  if (peers.has(peer)) return true;
-  log.warn('[talon] ingress: rejected connection from ' + (peer || 'unknown'));
-  socket.destroy();
-  return false;
-}
-function requestHeaders(req, voice) {
-  const headers = {...req.headers};
-  if (voice) {
-    // The HA ingress gateway is trusted; forwarded client-provided headers
-    // are not. Only the gateway's actual Host/Origin are passed through.
-    delete headers['x-forwarded-host'];
-    delete headers['x-forwarded-for'];
-    headers['x-forwarded-proto'] = 'https';
-  }
-  return headers;
-}
-function createIngressProxy({peers = trustedIngressPeers(), log = console} = {}) {
-  const server = http.createServer((req, res) => {
-    if (!authorized(req.socket, peers, log)) return;
-    const target = targetFor(req.url);
-    const upstream = http.request({
-      hostname: '127.0.0.1', port: target.port, method: req.method,
-      path: req.url, headers: requestHeaders(req, target.voice),
-    }, response => {
-      res.writeHead(response.statusCode || 502, response.headers);
-      response.pipe(res);
-    });
-    upstream.on('error', error => {
-      log.warn('[talon] ingress upstream unavailable: ' + error.code);
-      if (!res.headersSent) res.writeHead(502);
-      res.end('Upstream unavailable');
-    });
-    req.pipe(upstream);
+
+function createIngressProxy({ peers = trustedIngressPeers(), log = console } = {}) {
+  return net.createServer(client => {
+    const peer = normalizePeer(client.remoteAddress);
+    if (!peers.has(peer)) {
+      log.warn('[talon] ingress: rejected connection from ' + (peer || 'unknown'));
+      client.destroy();
+      return;
+    }
+    const upstream = net.connect({ host: '127.0.0.1', port: 7682 });
+    client.on('error', () => upstream.destroy());
+    upstream.on('error', () => client.destroy());
+    client.on('close', () => upstream.destroy());
+    upstream.on('close', () => client.destroy());
+    client.pipe(upstream).pipe(client);
   });
-  server.on('upgrade', (req, socket, head) => {
-    if (!authorized(socket, peers, log)) return;
-    const target = targetFor(req.url);
-    const upstream = net.connect(target.port, '127.0.0.1');
-    upstream.on('connect', () => {
-      let header = req.method + ' ' + req.url + ' HTTP/' + req.httpVersion + '\r\n';
-      const headers = requestHeaders(req, target.voice);
-      for (const [key, value] of Object.entries(headers)) {
-        if (Array.isArray(value)) for (const item of value) header += key + ': ' + item + '\r\n';
-        else if (value !== undefined) header += key + ': ' + value + '\r\n';
-      }
-      upstream.write(header + '\r\n');
-      if (head.length) upstream.write(head);
-      socket.pipe(upstream).pipe(socket);
-    });
-    upstream.on('error', () => socket.destroy());
-    socket.on('error', () => upstream.destroy());
-    socket.on('close', () => upstream.destroy());
-    upstream.on('close', () => socket.destroy());
-  });
-  return server;
 }
+
 if (require.main === module) {
   const peers = trustedIngressPeers();
-  const listener = createIngressProxy({peers});
+  const listener = createIngressProxy({ peers });
   listener.on('error', error => {
     console.error('[talon] ingress: failed to start: ' + error.message);
     process.exitCode = 1;
   });
   listener.listen(7681, '0.0.0.0', () => {
-    console.info('[talon] ingress: authenticated terminal + optional /voice/ on 7681');
+    console.info('[talon] ingress: listening on 7681; trusted gateway(s): ' + [...peers].join(', '));
   });
 }
-module.exports = {normalizePeer, trustedIngressPeers, createIngressProxy, targetFor};
+
+module.exports = { normalizePeer, trustedIngressPeers, createIngressProxy };
