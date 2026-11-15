@@ -1,7 +1,7 @@
 # Build Talon from a pinned upstream ivo-toby/talon commit.
 # Review compatibility with outstanding Talon PRs before releasing.
 FROM node:24-bookworm-slim AS builder
-ARG TALON_GIT_REF=338ce66f5ed63df5b5961a837da602aa8ebcdfd0
+ARG TALON_GIT_REF=v0.2.8
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates && rm -rf /var/lib/apt/lists/*
 WORKDIR /opt/talond
 RUN git clone https://github.com/ivo-toby/talon.git . \
