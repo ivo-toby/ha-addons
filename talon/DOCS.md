@@ -3,7 +3,7 @@
 ## Quick installation: Codex + Telegram
 
 1. In Home Assistant, open **Settings → Add-ons → Add-on Store → ⋮ → Repositories** and add `https://github.com/ivo-toby/ha-addons`. Install **Talon** from this repository.
-2. Leave the add-on options `instance` and `storage_path` empty for a first installation. Start Talon and select **Open Web UI** to access its management terminal.
+2. Leave the add-on options `instance` and `storage_path` empty for a first installation. Start Talon, select **Open Web UI**, then choose **Management & recovery terminal**.
 3. Check the daemon with `talonctl status`. Sign in to Codex using `codex login --device-auth` and follow the displayed instructions. Verify with `codex login status`.
 4. Configure Codex as the agent provider. **The `--enabled` flag is required:** without it, newly added providers are disabled by default, and setting the default provider or testing it will fail:
 
@@ -89,6 +89,8 @@
    ```
 
 9. **Restart the Talon add-on from Home Assistant** to rebuild the daemon's provider registry. A `talonctl reload` hot-reload is not a substitute for a full restart after changing provider configuration. Run `talonctl status`, then open your bot in Telegram, tap **Start**, and send `Hello`. In the add-on logs verify `agent-runner: starting query` reports `provider: codex` and the bot actually replies. If the daemon opens only the recovery terminal, inspect startup logs and run `node /usr/local/lib/talon-check-config.cjs /data/talon/workspaces/default/talond.yaml /data/talon/workspaces/default /data/talon/workspaces/default/state` before restarting again.
+
+10. **Enable browser voice separately if you want speech.** The Codex/Telegram steps above do not create a `voice:` section, and filling the two voice password fields does not enable it. Follow [Enable voice after the quick installation](#enable-voice-after-the-quick-installation), then restart the add-on. Telegram and voice can use the same `assistant` persona.
 
 **Troubleshooting:** If Telegram shows *typing* without replying, inspect the add-on logs for the provider actually handling the thread. An old thread may still be tied to `claude-code` even after Codex is set as default. Inspect with `talonctl list-threads --channel telegram` and, if appropriate, reset affinity using `talonctl reset-provider-affinity --channel telegram --all --yes`. If the add-on only opens a recovery terminal after restart, check the log's configuration-validation error: a missing file or invalid path can prevent the daemon from starting. Do not delete the workspace or database as a troubleshooting shortcut.
 
@@ -240,34 +242,7 @@ Voice is opt-in because it needs an existing persona and live-provider credentia
    your live-provider API key in the add-on configuration. Both fields are
    passwords. They are passed through private environment variables, separately
    from Codex authentication. Do not put them in a URL or source control.
-2. In the terminal, edit your workspace's `talond.yaml`. Merge these settings into
-   the existing `auth.providers` and choose an **existing configured persona**:
-
-   ```yaml
-   auth:
-     providers:
-       voice:
-         apiKey: ${TALON_VOICE_ACCESS_TOKEN}
-       voice_openai:
-         apiKey: ${TALON_VOICE_OPENAI_API_KEY}
-
-   voice:
-     enabled: true
-     host: 127.0.0.1
-     port: 8787
-     accessTokenRef: voice
-     liveApiKeyRef: voice_openai
-     persona: assistant  # replace with your existing persona's name
-     model: gpt-live-1
-     allowedOrigins:
-       - https://homeassistant.example.com  # your real HA origin, including port if any
-   ```
-
-   Keep other auth entries and persona configuration intact. The selected persona's
-   backend provider must be enabled and authenticated. Its backend model remains
-   independent of the live voice model. Use the live model supported by your
-   provider account. The add-on checks that enabled voice stays on `127.0.0.1:8787`;
-   an invalid binding enters terminal recovery mode.
+2. Complete [Enable voice after the quick installation](#enable-voice-after-the-quick-installation) below. This writes the missing `voice:` section and the secret references into the **active workspace**, after checking that the selected persona and provider already exist.
 3. Restart the add-on, open **Voice**, sign in with `voice_access_token`, and
    select **Call Talon**. Allow microphone access. A remembered login does not
    start a call automatically. Mute, hangup and logout use the upstream UI.
@@ -284,6 +259,91 @@ real synthetic WebRTC audio; the paid provider is replaced. A live provider call
 and physical device microphone/speaker still require a test on your installation.
 See [upstream voice configuration](https://github.com/ivo-toby/talon/blob/v0.2.8/docs/guides/voice.mdx)
 for persona policy, provider requirements and session limits.
+
+### Enable voice after the quick installation
+
+**Do this after quick-installation steps 1–9 and after saving the two voice
+password fields.** It is normal for `voice:` to be absent until this step. The
+password fields make secrets available to Talon; they do not write or enable
+voice in `talond.yaml`.
+
+1. Open **Management & recovery terminal**. Check the active file and personas:
+
+   ```sh
+   echo "$TALOND_CONFIG_PATH"
+   talonctl list-personas
+   ```
+
+   If there is no persona, complete quick-installation steps 4–5 first. Do not
+   create `assistant` again if it already exists. The persona's provider must be
+   enabled and authenticated as described in steps 3–4.
+2. Copy this **entire command block** into that terminal. It asks for your real
+   HTTPS Home Assistant origin (for example `https://ha.example.com:8123`, without
+   `/app/...` or an ingress path) and your existing persona name. Press Enter to
+   use `assistant`. No passwords or API keys are entered into this command.
+
+   ```sh
+   read -rp "Home Assistant HTTPS origin: " TALON_VOICE_ORIGIN
+   read -rp "Existing persona [assistant]: " TALON_VOICE_PERSONA
+   export TALON_VOICE_ORIGIN TALON_VOICE_PERSONA
+   node <<'NODE'
+   const fs = require('node:fs');
+   const yaml = require('/opt/talond/node_modules/js-yaml');
+   const file = process.env.TALOND_CONFIG_PATH;
+   if (!file) throw new Error('Open the add-on management terminal first.');
+   const input = (process.env.TALON_VOICE_ORIGIN || '').trim();
+   const origin = new URL(input);
+   if (origin.protocol !== 'https:' || origin.username || origin.password ||
+       origin.pathname !== '/' || origin.search || origin.hash) {
+     throw new Error('Enter only the HTTPS origin, e.g. https://ha.example.com:8123');
+   }
+   const cfg = yaml.load(fs.readFileSync(file, 'utf8'));
+   const name = (process.env.TALON_VOICE_PERSONA || '').trim() || 'assistant';
+   const persona = (cfg.personas || []).find(p => p.name === name);
+   if (!persona) throw new Error('Persona not found. Complete quick-installation step 5 first.');
+   const providerName = persona.provider || cfg.agentRunner?.defaultProvider;
+   const provider = cfg.agentRunner?.providers?.[providerName];
+   if (!provider || provider.enabled === false) {
+     throw new Error('Persona provider missing or disabled. Complete quick-installation step 4 first.');
+   }
+   cfg.auth ??= {};
+   cfg.auth.providers ??= {};
+   cfg.auth.providers.voice = { ...cfg.auth.providers.voice,
+     apiKey: '${TALON_VOICE_ACCESS_TOKEN}' };
+   cfg.auth.providers.voice_openai = { ...cfg.auth.providers.voice_openai,
+     apiKey: '${TALON_VOICE_OPENAI_API_KEY}' };
+   cfg.voice = { ...cfg.voice, enabled: true, host: '127.0.0.1', port: 8787,
+     accessTokenRef: 'voice', liveApiKeyRef: 'voice_openai', persona: name,
+     model: cfg.voice?.model || 'gpt-live-1',
+     allowedOrigins: [...new Set([...(cfg.voice?.allowedOrigins || []), origin.origin])] };
+   const backup = file + '.before-voice-' + Date.now();
+   fs.copyFileSync(file, backup, fs.constants.COPYFILE_EXCL);
+   fs.chmodSync(backup, 0o600);
+   fs.writeFileSync(file, yaml.dump(cfg, { lineWidth: 120, noRefs: true }));
+   console.log('Voice enabled for persona ' + name + '. Backup: ' + backup);
+   console.log('Restart the add-on from Home Assistant.');
+   NODE
+   unset TALON_VOICE_ORIGIN TALON_VOICE_PERSONA
+   ```
+
+   The command preserves existing provider, model, Telegram, persona, storage
+   and other settings. It updates `voice`, `auth.providers.voice.apiKey` and
+   `auth.providers.voice_openai.apiKey`. It reformats YAML; the backup retains
+   the original formatting and comments. Secrets remain references to the two
+   HA options, rather than being copied into YAML. A previously selected live
+   voice model is preserved; `gpt-live-1` is the upstream default for a new setup.
+3. **Restart the entire add-on from Home Assistant**, so the saved password
+   options are exported and the voice listener starts. Open **Voice** and sign
+   in with your `voice_access_token`.
+4. If the page still says **Voice is unavailable**, check the **Talon add-on
+   logs**, rather than the Supervisor installation log. Look for
+   `browser voice server started` on `127.0.0.1:8787` and any earlier configuration
+   error. Do not delete your workspace or database.
+
+A LAN IP address opened over plain HTTP, such as `http://192.168.1.103:8123`, is
+not sufficient for browser microphone access. Set up HTTPS first, then open HA
+through that same HTTPS origin. The script deliberately rejects a plain-HTTP
+origin so this prerequisite is not missed.
 
 ### Upgrade checks
 
